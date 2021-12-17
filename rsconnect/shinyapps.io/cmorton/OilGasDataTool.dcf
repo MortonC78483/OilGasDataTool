@@ -1,0 +1,13 @@
+name: OilGasDataTool
+title: OilGasDataTool
+username:
+account: cmorton
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 5008628
+bundleId: 5276916
+url: https://cmorton.shinyapps.io/OilGasDataTool/
+when: 1637524956.40433
+lastSyncTime: 1637524956.40436
+asMultiple: FALSE
+asStatic: FALSE

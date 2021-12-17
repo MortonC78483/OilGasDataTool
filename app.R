@@ -68,10 +68,12 @@ sens_receptors <- sf::st_as_sf(sens_receptors, coords = c("Longitude", "Latitude
 
 field_boundaries <- read_sf("Field_Boundary_Cleaned")
 ## -------- API CALLS (FOR GEOCODING) -----------------------------------------
-# set up api for geocoding
-token <- "pk.eyJ1IjoibW9ydG9uYzc4NDgzIiwiYSI6ImNrdWQzcGI3YjE2anMycW1hNXdzYThnbzYifQ.7XJ83bHSkoUEBXG_sxr4zQ"
-# set up api for getting address suggestions
-token_here <- "JFMWOWFipmhL3d0m_u5q4MQ8_5owMBc5LLtlKluI5TU"
+# # set up api for geocoding
+# token <- "pk.eyJ1IjoibW9ydG9uYzc4NDgzIiwiYSI6ImNrdWQzcGI3YjE2anMycW1hNXdzYThnbzYifQ.7XJ83bHSkoUEBXG_sxr4zQ"
+# # set up api for getting address suggestions
+# token_here <- "JFMWOWFipmhL3d0m_u5q4MQ8_5owMBc5LLtlKluI5TU"
+token <- Sys.getenv("TOKEN")
+token_here <- Sys.getenv("TOKEN_HERE")
 set_key(token_here)
 
 # Set up CRS

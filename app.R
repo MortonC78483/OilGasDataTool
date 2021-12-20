@@ -24,7 +24,10 @@ types <- c("Active", "New", "Plugged", "Idle", "Other")
 
 # Update with filepath to wells data
 # NOTE: Data cleaning script is data_cleaning.R
-all_wells <- read_rds("input_data.rds")
+#PluggedOnly doesn't make sense as a well type
+all_wells <- read_rds("input_data.rds") %>%
+  mutate(WellStatus = ifelse(all_wells$WellStatus == "PluggedOnly", 
+                             "Plugged", WellStatus)) 
 
 # Update with desired label format on clicking wells
 all_wells <- all_wells %>%
@@ -41,8 +44,7 @@ wells_new <- all_wells %>%
   filter(WellStatus == "New")
 
 wells_plugged <- all_wells %>%
-  filter(WellStatus == "Plugged" | WellStatus == "PluggedOnly") %>%
-  mutate(WellStatus = "Plugged") # rename groups so that selection based on combined group name 
+  filter(WellStatus == "Plugged") # rename groups so that selection based on combined group name 
 # gets all well types within the single well type name, and so 
 # that well type displayed in well-specific information shows 
 # up as a category name
@@ -203,7 +205,7 @@ server <- function(input, output, session) {
                  stroke = TRUE, color = "black", opacity = 1, 
                  highlightOptions = highlightOptions(fill = FALSE, sendToBack = TRUE)) %>%
       addCircles(group = "radius", options = list(zIndex = 401),
-                 lat = geocoded()[2], lng = geocoded()[1], fill = TRUE, radius = 50,
+                 lat = geocoded()[2], lng = geocoded()[1], fill = TRUE, radius = 20,
                  stroke = FALSE,
                  fillColor = "black",
                  fillOpacity = 1,
@@ -233,7 +235,7 @@ server <- function(input, output, session) {
                  lat = as.numeric(sens_recept()$lat), lng = as.numeric(sens_recept()$lon),
                  popup = paste0("<b>", ifelse(sens_recept()$type == "school", paste0("School: "), paste0("Hospital: ")), "</b>",
                                 sens_recept()$Name)) %>%
-      addCircles(group = "Show Schools and Hospitals", data = sens_recept(), radius = 40,
+      addCircles(group = "Show Schools and Hospitals", data = sens_recept(), radius = 20,
                  stroke = F,
                  fillColor = ifelse(sens_recept()$type == "school", "#CE71ED", "#2441C0"),
                  fillOpacity = 1,

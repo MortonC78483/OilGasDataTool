@@ -25,7 +25,8 @@ types <- c("Active", "New", "Plugged", "Idle", "Other")
 # Update with filepath to wells data
 # NOTE: Data cleaning script is data_cleaning.R
 #PluggedOnly doesn't make sense as a well type
-all_wells <- read_rds("input_data.rds") %>%
+all_wells <- read_rds("input_data.rds") 
+all_wells <- all_wells %>%
   mutate(WellStatus = ifelse(all_wells$WellStatus == "PluggedOnly", 
                              "Plugged", WellStatus)) 
 

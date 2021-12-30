@@ -68,7 +68,8 @@ wells_other <- all_wells %>%
 radii_distances <- c(975.36, 4000)
 # labels (as strings) describing buffer options, 
 # must be in same order/same length as radii_distances
-radii_labels <- c("3200 feet -- proposed buffer distance", "2.5 mi -- air quality effects observed")
+radii_labels <- c("3200 feet -- proposed buffer distance", 
+                  "2.5 mi -- air quality effects observed")
 
 ## API CALLS -----
 # Geocoding (address -> lat/lon, MapBox API)
@@ -80,11 +81,13 @@ set_key(token_here)
 
 ## GEOMETRIES ----
 # Fix shape
-sens_receptors <- sf::st_as_sf(sens_receptors, coords = c("Longitude", "Latitude"), crs = crs_nad83)
+sens_receptors <- sf::st_as_sf(sens_receptors, 
+                               coords = c("Longitude", "Latitude"), crs = crs_nad83)
 # convert wells data to sf (for counting wells within radii)
-all_wells_sf <- sf::st_as_sf(all_wells, coords = c("Longitude", "Latitude"), crs = crs_nad83)
+all_wells_sf <- sf::st_as_sf(all_wells, 
+                             coords = c("Longitude", "Latitude"), crs = crs_nad83)
 
-## -------- START OF WEB TOOL --------------------
+# UI ----------------------------------------------------------------------------------------------
 ui <- fluidPage(
   sidebarLayout(
     sidebarPanel(
@@ -105,10 +108,12 @@ ui <- fluidPage(
   )
 )
 
+# SERVER ------------------------------------------------------------------------------------------
 server <- function(input, output, session) {
   # show date of most recent update of wells data
   output$date <- renderText({paste0("Date of last update to wells data: ", date_of_download)})
-  
+
+  ## GEOCODING ----
   # sets up valid address options
   output$geocoder <- renderUI({
     selectInput("address", "Select valid address", 
@@ -123,6 +128,9 @@ server <- function(input, output, session) {
                             {mb_geocode(search_text = paste0(" ", input$address[1]),
                                         output = "coordinates",
                                         access_token = token)})
+
+  ## BASE MAP
+  # values$def is 0 if "run" hasn't been pressed yet
   values <- reactiveValues(def = 0)
   
   observeEvent(input$run,{
@@ -131,19 +139,19 @@ server <- function(input, output, session) {
   
   val_geo_1 <- reactive({
     if(values$def == 0) {
-      return(-118.2437)
+      return(-118.2437) # Set map to central LA if "run" hasn't been pressed yet
     }
     else{
-      return(geocoded()[1])
+      return(geocoded()[1]) # Set map to geocoded value if "run" has been pressed
     }
   })
   
   val_geo_2 <- reactive({
     if(values$def == 0) {
-      return(34.0522)
+      return(34.0522) # Set map to central LA if "run" hasn't been pressed yet
     }
     else{
-      return(geocoded()[2])
+      return(geocoded()[2]) # Set map to geocoded value if "run" has been pressed
     }
   })
   
@@ -158,45 +166,45 @@ server <- function(input, output, session) {
       )) %>%
       addMapPane(name = "radius", zIndex = 2) %>%
       addMapPane(name = "upper", zIndex = 402) %>% # wells will always be on top of address circle
-      addLayersControl(
-        overlayGroups = c(types, "Show Schools and Hospitals", "Show Oil Field Boundaries"),
+      # options to select well types, show sensitive receptors, show field boundaries
+      addLayersControl( 
+        overlayGroups = c(types, "Show Nearby Schools and Hospitals", 
+                          "Show Oil Field Boundaries"),
         options = layersControlOptions(
           collapsed = T
         )
       )  %>%
+      # Header for well types selection
       htmlwidgets::onRender("
         function() {
             $('.leaflet-control-layers-overlays').prepend('<label style=\"text-align:center\">Select Well Types to Display</label>');
         }
     ") %>%
-      setView(lng = val_geo_1(), lat = val_geo_2(), zoom = 12) %>%
-      addLegend(layerId = "legend", group = "Show Schools and Hospitals", values = c("School", "Hospital"), position = "bottomright",
+      setView(lng = val_geo_1(), lat = val_geo_2(), zoom = 12) %>% # center on address/central LA
+      # dynamic legend for schools/hospitals
+      addLegend(layerId = "legend", group = "Show Nearby Schools and Hospitals", 
+                values = c("School", "Hospital"), position = "bottomright",
                 labels = c("School", "Hospital"), colors = c("#CE71ED", "#2441C0")) %>%
+      # oil field boundaries
       addPolygons(group = "Show Oil Field Boundaries", data = field_boundaries,
                   stroke = F,
                   fillColor = "red",
                   fillOpacity = .3) %>%
-      hideGroup("Show Schools and Hospitals") %>%
-      clearGroup("Show Schools and Hospitals") %>%
+      hideGroup("Show Nearby Schools and Hospitals") %>%
+      clearGroup("Show Nearby Schools and Hospitals") %>%
       hideGroup("Show Oil Field Boundaries") %>%
       removeControl(layerId = "legend") 
   })
+
   
-  # Determine radius location for intersection with wells
-  geocoded_sf <- reactive({
-    data.frame(lon = geocoded()[1], lat = geocoded()[2]) %>%
-      st_as_sf(coords = c("lon", "lat"), crs = crs_nad83) %>%
-      st_transform(crs_projected) %>%
-      st_buffer(dist = as.numeric(input$radius)) %>%
-      st_transform(crs_nad83)
-  })
-  
+  ## MAP ADDRESS CIRCLE ----
   # update map's radius around geocoded point when new radius selected
   observe({
     leafletProxy("map") %>%
       clearGroup(group = "radius") %>%
       addCircles(group = "radius", options = list(zIndex = 401),
-                 lat = geocoded()[2], lng = geocoded()[1], fill = FALSE, fillOpacity = 0, radius = as.numeric(input$radius),
+                 lat = geocoded()[2], lng = geocoded()[1], fill = FALSE, fillOpacity = 0, 
+                 radius = as.numeric(input$radius),
                  stroke = TRUE, color = "black", opacity = 1, 
                  highlightOptions = highlightOptions(fill = FALSE, sendToBack = TRUE)) %>%
       addCircles(group = "radius", options = list(zIndex = 401),
@@ -207,6 +215,7 @@ server <- function(input, output, session) {
                  highlightOptions = highlightOptions(fill = FALSE, sendToBack = TRUE))
   })
   
+  ## MAP SENSITIVE RECEPTORS ----
   # find sensitive receptors intersecting with 10 km buffer around chosen point
   sens_recept <- reactive ({
     geo <- data.frame(lon = val_geo_1(), lat = val_geo_2()) %>%
@@ -222,24 +231,29 @@ server <- function(input, output, session) {
   
   observe({
     leafletProxy("map") %>%
-      clearGroup(group = "Show Schools and Hospitals") %>%
-      addCircles(group = "Show Schools and Hospitals", data = sens_recept(), radius = as.numeric(input$radius),
+      clearGroup(group = "Show Nearby Schools and Hospitals") %>%
+      addCircles(group = "Show Nearby Schools and Hospitals", data = sens_recept(), 
+                 radius = as.numeric(input$radius),
                  stroke = F,
                  fillColor = ifelse(sens_recept()$type == "school", "#CE71ED", "#2441C0"),
                  fillOpacity = .1,
                  lat = as.numeric(sens_recept()$lat), lng = as.numeric(sens_recept()$lon),
-                 popup = paste0("<b>", ifelse(sens_recept()$type == "school", paste0("School: "), paste0("Hospital: ")), "</b>",
+                 popup = paste0("<b>", ifelse(sens_recept()$type == "school", paste0("School: "), 
+                                              paste0("Hospital: ")), "</b>", 
                                 sens_recept()$Name)) %>%
-      addCircles(group = "Show Schools and Hospitals", data = sens_recept(), radius = 20,
-                 stroke = F,
+      addCircles(group = "Show Nearby Schools and Hospitals", data = sens_recept(), 
+                 radius = 20, stroke = F,
                  fillColor = ifelse(sens_recept()$type == "school", "#CE71ED", "#2441C0"),
                  fillOpacity = 1,
                  lat = as.numeric(sens_recept()$lat), lng = as.numeric(sens_recept()$lon),
-                 popup = paste0("<b>", ifelse(sens_recept()$type == "school", paste0("School: "), paste0("Hospital: ")), "</b>",
+                 popup = paste0("<b>", ifelse(sens_recept()$type == "school", paste0("School: "), 
+                                              paste0("Hospital: ")), "</b>",
                                 sens_recept()$Name))
   })
   
-  # add wells, wells will be updated each time new well type is selected or when new address is submitted
+  ## MAP WELLS ----
+  # add wells, wells will be updated each time new well type is selected or when new address 
+  # is submitted
   observeEvent(val_geo_1(), {
     leafletProxy("map") %>%
       clearMarkers() %>%
@@ -270,7 +284,16 @@ server <- function(input, output, session) {
                        popup = wells_other$label)
   })
   
-  ### Well Counts ------------------------------------------------------------------
+  ## WELL COUNTS ----
+  # Determine radius location for intersection with wells
+  geocoded_sf <- reactive({
+    data.frame(lon = geocoded()[1], lat = geocoded()[2]) %>%
+      st_as_sf(coords = c("lon", "lat"), crs = crs_nad83) %>%
+      st_transform(crs_projected) %>%
+      st_buffer(dist = as.numeric(input$radius)) %>%
+      st_transform(crs_nad83)
+  })
+  
   # figure out which wells are being shown on the map to do an exposure assessmnet
   selected_wells <- reactive ({
     all_wells_sf %>%
@@ -284,7 +307,8 @@ server <- function(input, output, session) {
   })
   
   # text for well counts output
-  output$numWells <- renderText({paste("<b>", "Number of Wells Within Radius: ", numWells(), "</b>")})
+  output$numWells <- renderText({paste("<b>", "Number of Wells Within Radius: ", numWells(), 
+                                       "</b>")})
 }
 shinyApp(ui, server)
 

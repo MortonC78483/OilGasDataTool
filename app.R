@@ -1,4 +1,3 @@
-# Adding in oil field boundaries
 
 library(dplyr)
 library(data.table)
@@ -8,7 +7,16 @@ library(shiny)
 library(hereR)
 library(sf)
 library(readr)
-## -------- USER MAY NEED TO CHANGE -------------------------------------------
+
+# SETUP -------------------------------------------------------------------------------------------
+# NOTE: Data cleaning script is data_cleaning.R, run to generate input files
+
+## LOAD DATA ----
+all_wells <- read_rds("input_data.rds") 
+sens_receptors <- readRDS("sensitive_receptors.rds")
+field_boundaries <- read_sf("Field_Boundary_Cleaned")
+
+## PROJECT CONSTANTS ----
 date_of_download <- "10/04/2021" # Update with date of most recent download of the wells data
 
 # Set up CRS
@@ -18,26 +26,27 @@ crs_nad83 <- st_crs("+init=epsg:4269 +proj=longlat +ellps=GRS80
 # projected CRS, for creating buffers
 crs_projected <- st_crs("+proj=utm +zone=11 +datum=WGS84")
 
+## WELL STATUS ----
 # Vector of well types (from WellStatus column of all_wells data) desired in map
 types <- c("Active", "New", "Plugged", "Idle", "Other") 
-# Note that I'm aggregating Plugged and PluggedOnly here, and putting all other types into "Other"
 
-# Update with filepath to wells data
-# NOTE: Data cleaning script is data_cleaning.R
-#PluggedOnly doesn't make sense as a well type
-all_wells <- read_rds("input_data.rds") 
+# Aggregating Plugged and PluggedOnly here, and putting all other types into "Other"
 all_wells <- all_wells %>%
   mutate(WellStatus = ifelse(all_wells$WellStatus == "PluggedOnly", 
                              "Plugged", WellStatus)) 
 
 # Update with desired label format on clicking wells
 all_wells <- all_wells %>%
-  mutate(label = paste0("This <b>", all_wells$WellTypeLa, "</b> well is <b>", all_wells$WellStatus, "</b>.<br>It was drilled on <b>", 
-                        all_wells$SpudDate, "</b> and operated by <b>", all_wells$OperatorNa, "</b>.", 
-                        ifelse (!is.na(AbdDate), paste0(" It was abandoned in <b>", all_wells$AbdDate, "</b>."), "")))
+  mutate(label = paste0("This <b>", all_wells$WellTypeLa, "</b> well is <b>", 
+                        all_wells$WellStatus, "</b>.<br>It was drilled on <b>", 
+                        all_wells$SpudDate, "</b> and operated by <b>", 
+                        all_wells$OperatorNa, "</b>.", 
+                        ifelse (!is.na(AbdDate), 
+                                paste0(" It was abandoned in <b>", 
+                                       all_wells$AbdDate, "</b>."), "")))
 
-# Create individual datasets to be placed in map (NOTE if number/name of datasets is changed, need
-# to also change the addCircleMarkers command in output$map)
+# Create individual datasets to be placed in map (NOTE if number/name of well statuses
+# is changed, need to also change the addCircleMarkers command in output$map)
 wells_active <- all_wells %>%
   filter(WellStatus == "Active")
 
@@ -45,46 +54,33 @@ wells_new <- all_wells %>%
   filter(WellStatus == "New")
 
 wells_plugged <- all_wells %>%
-  filter(WellStatus == "Plugged") # rename groups so that selection based on combined group name 
-# gets all well types within the single well type name, and so 
-# that well type displayed in well-specific information shows 
-# up as a category name
+  filter(WellStatus == "Plugged") 
 
 wells_idle <- all_wells %>%
   filter(WellStatus == "Idle")
 
 wells_other <- all_wells %>%
-  filter(!(WellStatus %in% c("Active", "New", "Plugged", "PluggedOnly", "Idle"))) %>%
-  mutate(WellStatus = "Other") # rename groups so that selection based on combined group name 
-# gets all well types within the single well type name, and so 
-# that well type displayed in well-specific information shows 
-# up as a category name
+  filter(!(WellStatus %in% c("Active", "New", "Plugged", "Idle"))) %>%
+  mutate(WellStatus = "Other") 
 
+## RADII ----
 # distances (in m) of buffer options
 radii_distances <- c(975.36, 4000)
 # labels (as strings) describing buffer options, 
 # must be in same order/same length as radii_distances
 radii_labels <- c("3200 feet -- proposed buffer distance", "2.5 mi -- air quality effects observed")
 
-sens_receptors <- readRDS("sensitive_receptors.rds")
-sens_receptors <- sf::st_as_sf(sens_receptors, coords = c("Longitude", "Latitude"), crs = crs_nad83)
-
-field_boundaries <- read_sf("Field_Boundary_Cleaned")
-## -------- API CALLS (FOR GEOCODING) -----------------------------------------
-# # set up api for geocoding
-# token <- "pk.eyJ1IjoibW9ydG9uYzc4NDgzIiwiYSI6ImNrdWQzcGI3YjE2anMycW1hNXdzYThnbzYifQ.7XJ83bHSkoUEBXG_sxr4zQ"
-# # set up api for getting address suggestions
-# token_here <- "JFMWOWFipmhL3d0m_u5q4MQ8_5owMBc5LLtlKluI5TU"
+## API CALLS -----
+# Geocoding (address -> lat/lon, MapBox API)
 token <- Sys.getenv("TOKEN")
+
+# Address suggestions (Here API)
 token_here <- Sys.getenv("TOKEN_HERE")
 set_key(token_here)
 
-# Set up CRS
-crs_nad83 <- st_crs("+init=epsg:4269 +proj=longlat +ellps=GRS80
-                        +datum=NAD83 +no_defs +towgs84=0,0,0")  
-# projected CRS, for creating buffers
-crs_projected <- st_crs("+proj=utm +zone=11 +datum=WGS84")
-
+## GEOMETRIES ----
+# Fix shape
+sens_receptors <- sf::st_as_sf(sens_receptors, coords = c("Longitude", "Latitude"), crs = crs_nad83)
 # convert wells data to sf (for counting wells within radii)
 all_wells_sf <- sf::st_as_sf(all_wells, coords = c("Longitude", "Latitude"), crs = crs_nad83)
 
@@ -93,26 +89,24 @@ ui <- fluidPage(
   sidebarLayout(
     sidebarPanel(
       # set up UI elements within panel (inputs)
-      textInput("text", "Start typing address"),
-      uiOutput("geocoder"),
-      actionButton("run", "Run"),
-      #actionButton("sens", "show sens"),
-      radioButtons("radius", "Select Radius",
+      textInput("text", "Start typing address"), # type address
+      uiOutput("geocoder"), # address suggestions
+      actionButton("run", "Run"), # geocodes
+      radioButtons("radius", "Select Radius", # radius selection
                    choiceValues = radii_distances,
                    choiceNames = radii_labels),
-      textOutput("date")
-      #htmlOutput("wellTypes")
+      textOutput("date") # date of last data update
     ),
     mainPanel(
-      leafletOutput("map", height = "100vh"),
-      absolutePanel(bottom = "5%", left = "5%",
+      leafletOutput("map", height = "100vh"), # main map
+      absolutePanel(bottom = "5%", left = "5%", # counts wells in radius
                     htmlOutput("numWells"))
     )
   )
 )
 
 server <- function(input, output, session) {
-  # show most recent update of wells data
+  # show date of most recent update of wells data
   output$date <- renderText({paste0("Date of last update to wells data: ", date_of_download)})
   
   # sets up valid address options
@@ -276,7 +270,7 @@ server <- function(input, output, session) {
                        popup = wells_other$label)
   })
   
-  
+  ### Well Counts ------------------------------------------------------------------
   # figure out which wells are being shown on the map to do an exposure assessmnet
   selected_wells <- reactive ({
     all_wells_sf %>%
@@ -285,7 +279,6 @@ server <- function(input, output, session) {
   
   # count number of wells within radius (exposure assessment)
   numWells <- reactive ({
-    
     # find the intersection of wells and buffer
     as.character(sum(unlist(st_intersects(selected_wells(), geocoded_sf()))))
   })

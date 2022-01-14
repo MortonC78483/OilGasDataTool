@@ -3,6 +3,7 @@
 library(tidyverse)
 library(readxl)
 library(sf)
+library(data.table)
 
 ## ----- CLEAN WELLS DATA -----
 # Source: https://www.conservation.ca.gov/calgem/maps
@@ -74,3 +75,35 @@ field_boundaries <- read_sf("RawData/Field_Boundary") %>%
 # Write oil field boundaries data
 write_sf(field_boundaries, "Field_Boundary_Cleaned.shp")
   
+## ---- SPANISH TRANSLATED INPUT DATA ----
+output_spanish <- output
+output_spanish$WellStatus <- as.factor(output_spanish$WellStatus)
+# translate relevant well statuses
+levels(output_spanish$WellStatus) <- c("Abeyance", "Activa", "Fuera de servicio",
+                                       "Nuevo", "Tapado", "PluggedOnly", "Unknown")
+output_spanish$WellTypeLa <- as.factor(output_spanish$WellTypeLa)  
+# translate well types
+levels(output_spanish$WellTypeLa) <- c("Inyección de aire",
+                                       "Core agujero",
+                                       "Ciclo de vapor",
+                                       "Gas seco",
+                                       "Agujero seco",
+                                       "Gas",
+                                       "Eliminación de Gas",
+                                       "Almacenamiento de Gas", 
+                                       "Inyección",
+                                       "Gas licuado",
+                                       "Multiuso",
+                                       "Observación",
+                                       "Aceite y gas",
+                                       "Presión de Mantenimiento",
+                                       "Inundación con vapor",
+                                       "Desconocida",
+                                       "Eliminación de agua",
+                                       "Fuente de agua",
+                                       "Inundación con agua")
+output_spanish$WellStatus <- as.character(output_spanish$WellStatus)
+output_spanish$WellTypeLa <- as.character(output_spanish$WellTypeLa)  
+# Write output file
+write_rds(output_spanish, "input_data_spanish.rds")
+
